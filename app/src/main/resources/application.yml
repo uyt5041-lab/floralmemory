@@ -1,0 +1,29 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/wasteaware
+    username: postgres
+    password: 1234
+  jpa:
+    hibernate:
+      # Fastest path for local dev/demo: auto-create/update tables.
+      # When you switch to real migrations later, set this back to 'none'.
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          time_zone: UTC
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+app:
+  seed:
+    enabled: true
+
+server:
+  port: 8080
+
+logging:
+  level:
+    org.hibernate.SQL: debug
