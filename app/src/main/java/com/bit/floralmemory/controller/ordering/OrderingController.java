@@ -10,15 +10,25 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class OrderingController {
 
+    private final com.bit.floralmemory.service.OrderingService orderingService;
+
+    @PostMapping("/run")
     @PostMapping("/run")
     public ApiResponse<OrderingRunResponse> run(@RequestBody OrderingRunRequest req) {
-        // TODO: create ordering_run + cost_assumption + order_recommendation
-        return ApiResponse.ok(OrderingRunResponse.builder().orderingRunId(0L).build());
+        Long id = orderingService.runOrdering(req);
+        return ApiResponse.ok(OrderingRunResponse.builder().orderingRunId(id).build());
+    }
+
+    @PostMapping("/policy-sweep")
+    public ApiResponse<PolicySweepResponse> policySweep(@RequestBody PolicySweepRequest req) {
+        PolicySweepResponse resp = orderingService.runPolicySweep(req);
+        return ApiResponse.ok(resp);
     }
 
     @GetMapping("/results")
     public ApiResponse<OrderingResultsResponse> results(@RequestParam Long orderingRunId) {
         // TODO
-        return ApiResponse.ok(OrderingResultsResponse.builder().orderingRunId(orderingRunId).series(java.util.List.of()).build());
+        return ApiResponse
+                .ok(OrderingResultsResponse.builder().orderingRunId(orderingRunId).series(java.util.List.of()).build());
     }
 }

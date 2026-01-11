@@ -25,6 +25,18 @@
 
 ---
 
+## 1.3 Schema Management (Flyway / JPA Auto Toggle)
+
+We support two modes:
+- MODE_A (Fast): JPA ddl-auto=create/update (local-only quick start)
+- MODE_B (Controlled): Flyway migrations (dev/stage/prod)
+
+Rule:
+- Never use ddl-auto=update in prod.
+- Flyway is the source of truth when enabled.
+
+---
+
 ## 2) Core Dimension Tables
 
 ### 2.1 dim_country
@@ -163,6 +175,29 @@ CREATE TABLE calendar_event_monthly (
   event_detail JSONB NOT NULL DEFAULT '{}'::jsonb
 );
 ```
+
+---
+
+### 4.3 context_feature_monthly (NEW)
+
+Context features per scope+month (extensible exogenous signals).
+
+```sql
+CREATE TABLE context_feature_monthly (
+  scope_hash TEXT NOT NULL,               -- hash(scope_json) for join convenience
+  month DATE NOT NULL,                    -- YYYY-MM-01
+  features_json JSONB NOT NULL,           -- {"event_score":0.7,"holiday":1,"fx_usdkrw":1320,...}
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (scope_hash, month)
+);
+
+CREATE INDEX idx_context_feature_month ON context_feature_monthly(month);
+```
+
+> Notes:
+> - calendar_event / calendar_event_monthly are “human-editable” sources.
+> - context_feature_monthly is the “model-ready” feature pack.
+> - features_json must include at least: event_score (double).
 
 ---
 
@@ -314,6 +349,47 @@ CREATE INDEX idx_order_month ON order_recommendation(month);
 
 ---
 
+### 7.4 policy_sweep_run (NEW)
+
+Policy sweep executions to find optimal Co/Cu.
+
+```sql
+CREATE TABLE policy_sweep_run (
+  sweep_id BIGSERIAL PRIMARY KEY,
+  run_id BIGINT NOT NULL REFERENCES model_run(run_id),
+  objective TEXT NOT NULL DEFAULT 'MIN_EXPECTED_TOTAL_LOSS',
+  grid_json JSONB NOT NULL,               -- {"co":[...],"cu":[...],"sigmaInflation":[...],...}
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+### 7.5 policy_sweep_result (NEW)
+
+Sweep trial results.
+
+```sql
+CREATE TABLE policy_sweep_result (
+  sweep_result_id BIGSERIAL PRIMARY KEY,
+  sweep_id BIGINT NOT NULL REFERENCES policy_sweep_run(sweep_id),
+  co_unit NUMERIC NOT NULL,
+  cu_unit NUMERIC NOT NULL,
+  service_level NUMERIC NOT NULL,
+  z_value NUMERIC NOT NULL,
+  sigma_inflation NUMERIC NOT NULL DEFAULT 1.0,   -- 1.0 means no inflation
+  yhat_shrink NUMERIC NOT NULL DEFAULT 0.0,       -- 0.0 means no shrink
+  expected_total_loss NUMERIC,
+  expected_waste_cost NUMERIC,
+  expected_stockout_loss NUMERIC,
+  constraints_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  is_best BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_sweep_result_best ON policy_sweep_result(sweep_id, is_best);
+```
+
+---
+
 ## 8) Evaluation / Reporting
 
 ### 8.1 model_metric
@@ -455,6 +531,45 @@ Response:
 
 ---
 
+## 2.3 Context APIs (NEW)
+
+### 2.3.1 Upsert calendar events (manual or batch)
+POST /api/context/events
+
+Request:
+```json
+{
+  "events": [
+    { "date": "2025-02-14", "code": "VALENTINES", "intensity": 5, "notes": "..." },
+    { "date": "2025-05-08", "code": "PARENTS_DAY", "intensity": 4, "notes": "..." }
+  ]
+}
+```
+
+Response:
+```json
+{ "success": true, "data": { "upserted": 2 }, "error": null }
+```
+
+### 2.3.2 Rebuild monthly features for a scope+range
+POST /api/context/rebuild
+
+Request:
+```json
+{
+  "scope": { ... },
+  "fromMonth": "2022-01-01",
+  "toMonth": "2025-12-01"
+}
+```
+
+Response:
+```json
+{ "success": true, "data": { "monthsBuilt": 48 }, "error": null }
+```
+
+---
+
 ## 3) Data Query APIs
 
 ### 3.1 Get normalized monthly imports
@@ -525,6 +640,14 @@ Response:
 ---
 
 ## 5) Forecast Orchestration APIs (Backend)
+
+Forecast models are grouped:
+- SHORT: Holt-Winters / ETS baseline
+- MID: Prophet (with events)
+- LONG: SARIMA (seasonality + long trend)
+
+The backend persists per-model forecasts into forecast_result (yhat + sigma),
+and the final ensemble into forecast_ensemble (weights_json).
 
 ### 5.1 Run forecast (Short/Mid/Long + Ensemble)
 
@@ -668,6 +791,53 @@ Response:
         "explanation": "12m horizon ensemble, SL from Cu/Co, capped by p90"
       }
     ]
+  },
+  "error": null
+}
+```
+
+---
+
+### 6.3 Ordering Policy Sweep API (NEW)
+
+POST /api/ordering/policy-sweep
+
+Goal:
+- choose Co/Cu + conservatism knobs (sigma inflation, yhat shrink)
+- minimize expected_total_loss (primary KPI)
+
+Request:
+```json
+{
+  "runId": 123,
+  "grid": {
+    "coUnit": [0.2, 0.4, 0.8],
+    "cuUnit": [0.5, 1.0, 2.0],
+    "sigmaInflation": [1.0, 1.2, 1.5],
+    "yhatShrink": [0.0, 0.05, 0.10]
+  },
+  "constraints": {
+    "minServiceLevel": 0.6,
+    "maxOrderCapP90": true
+  }
+}
+```
+
+Response:
+```json
+{
+  "success": true,
+  "data": {
+    "sweepId": 77,
+    "best": {
+      "coUnit": 0.4,
+      "cuUnit": 1.0,
+      "serviceLevel": 0.714,
+      "zValue": 0.565,
+      "sigmaInflation": 1.2,
+      "yhatShrink": 0.05,
+      "expectedTotalLoss": 12345.67
+    }
   },
   "error": null
 }

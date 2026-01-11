@@ -773,6 +773,155 @@ public class ModelMetric {
 }
 ```
 
+### `src/main/java/com/bit/floralmemory/entity/ContextFeatureMonthly.java`
+
+```java
+package com.bit.floralmemory.entity;
+
+import jakarta.persistence.*;
+import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
+import java.time.*;
+
+@Entity
+@Table(name = "context_feature_monthly")
+@Getter @Setter
+@NoArgsConstructor @AllArgsConstructor @Builder
+public class ContextFeatureMonthly {
+    // Composite Key would be better, but for skeleton let's use ID class or just separate fields
+    // Spec says: PRIMARY KEY (scope_hash, month)
+    
+    @EmbeddedId
+    private ContextFeatureId id;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "features_json", nullable = false, columnDefinition = "jsonb")
+    private String featuresJson;
+
+    @Column(name = "created_at", nullable = false)
+    private OffsetDateTime createdAt;
+
+    @Embeddable
+    @Getter @Setter
+    @NoArgsConstructor @AllArgsConstructor
+    @EqualsAndHashCode
+    public static class ContextFeatureId implements java.io.Serializable {
+        @Column(name = "scope_hash", nullable = false)
+        private String scopeHash;
+
+        @Column(name = "month", nullable = false)
+        private LocalDate month;
+    }
+}
+```
+
+### `src/main/java/com/bit/floralmemory/entity/PolicySweepRun.java`
+
+```java
+package com.bit.floralmemory.entity;
+
+import jakarta.persistence.*;
+import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
+import java.time.*;
+
+@Entity
+@Table(name = "policy_sweep_run")
+@Getter @Setter
+@NoArgsConstructor @AllArgsConstructor @Builder
+public class PolicySweepRun {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "sweep_id")
+    private Long sweepId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "run_id", nullable = false)
+    private ModelRun run;
+
+    @Column(name = "objective", nullable = false)
+    @Builder.Default
+    private String objective = "MIN_EXPECTED_TOTAL_LOSS";
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "grid_json", nullable = false, columnDefinition = "jsonb")
+    private String gridJson;
+
+    @Column(name = "created_at", nullable = false)
+    private OffsetDateTime createdAt;
+}
+```
+
+### `src/main/java/com/bit/floralmemory/entity/PolicySweepResult.java`
+
+```java
+package com.bit.floralmemory.entity;
+
+import jakarta.persistence.*;
+import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
+import java.time.*;
+
+@Entity
+@Table(name = "policy_sweep_result")
+@Getter @Setter
+@NoArgsConstructor @AllArgsConstructor @Builder
+public class PolicySweepResult {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "sweep_result_id")
+    private Long sweepResultId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sweep_id", nullable = false)
+    private PolicySweepRun sweepRun;
+
+    @Column(name = "co_unit", nullable = false)
+    private Double coUnit;
+
+    @Column(name = "cu_unit", nullable = false)
+    private Double cuUnit;
+
+    @Column(name = "service_level", nullable = false)
+    private Double serviceLevel;
+
+    @Column(name = "z_value", nullable = false)
+    private Double zValue;
+
+    @Column(name = "sigma_inflation", nullable = false)
+    private Double sigmaInflation;
+
+    @Column(name = "yhat_shrink", nullable = false)
+    private Double yhatShrink;
+
+    @Column(name = "expected_total_loss")
+    private Double expectedTotalLoss;
+
+    @Column(name = "expected_waste_cost")
+    private Double expectedWasteCost;
+
+    @Column(name = "expected_stockout_loss")
+    private Double expectedStockoutLoss;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "constraints_json", nullable = false, columnDefinition = "jsonb")
+    private String constraintsJson;
+
+    @Column(name = "is_best", nullable = false)
+    private Boolean isBest;
+
+    @Column(name = "created_at", nullable = false)
+    private OffsetDateTime createdAt;
+}
+```
+```
+
 ---
 
 ## 3) Repository 스켈레톤 (JPA)

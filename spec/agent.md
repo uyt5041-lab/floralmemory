@@ -21,6 +21,7 @@ Final output is **order quantities**, not forecasts.
 4. Decisions are evaluated by cost, not by accuracy alone.
 5. Multiple time horizons (Short / Mid / Long) must coexist.
 6. Every decision must be explainable in text.
+7. Policy parameters (Co/Cu) are optimized via backtest/sweep, not guessed.
 
 ---
 
@@ -270,8 +271,15 @@ Where:
 - Cu: unit stockout loss
 
 Defaults (if unknown):
-- Co ≈ unit_cost
 - Cu ≈ gross_margin + penalty
+
+> Determination Strategy:
+> - Start with a reasonable range (e.g., Co=[0.3, 0.5, 0.7], Cu=[1, 2, 3])
+> - Run **Policy Sweep** to find the combination that minimizes Expected Total Loss on historical data.
+
+Detailed Breakdown:
+- **Co (Overstock Cost)**: (Purchase Price + Disposal/Handling + Storage + Rework) / Unit
+- **Cu (Understock Cost)**: (Lost Margin + Expedited Shipping Premium + Reputation Penalty) / Unit
 
 ---
 
@@ -299,7 +307,26 @@ Each order must include a human-readable explanation:
 Example:
 "7-day horizon ensemble (S/M/L=0.6/0.3/0.1), SL=0.88 from Cu/Co, capped at P90"
 
----
+301:
+302: ---
+303:
+304: ### 7.5 Policy Optimization (Sweep & Backtest)
+305:
+306: We do not rely solely on "gut feeling" for Co/Cu. We use **Policy Sweep**.
+307:
+308: **Sweep Variables**:
+309: - `co_unit`: Range of waste costs
+310: - `cu_unit`: Range of stockout penalties
+311: - `sigma_inflation` (Default 1.0): Multiplier for uncertainty (conservatism knob)
+312: - `yhat_shrink` (Default 0.0): Percentage to reduce forecast (over-ordering prevention)
+313:
+314: **Objective**:
+315: - Minimize **Expected Total Loss** over the backtest period.
+316:
+317: **Output**:
+318: - The "Best Policy" config is saved and used for the actual production order.
+319:
+320: ---
 
 ## 8. KPI Evaluation
 
