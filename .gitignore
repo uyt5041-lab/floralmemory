@@ -3,3 +3,6 @@
 
 # Ignore Gradle build output directory
 build
+server.log
+server_clean.log
+fivecircles/

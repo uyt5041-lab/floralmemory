@@ -9,7 +9,6 @@ import com.bit.floralmemory.repository.ContextFeatureMonthlyRepository;
 import com.bit.floralmemory.service.ContextService;
 import com.bit.floralmemory.util.MonthUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,12 +18,18 @@ import java.util.HashMap;
 import java.util.Map;
 
 @Service
-@RequiredArgsConstructor
 public class ContextServiceImpl implements ContextService {
 
     private final CalendarEventRepository eventRepo;
     private final ContextFeatureMonthlyRepository contextRepo;
     private final ObjectMapper objectMapper;
+
+    public ContextServiceImpl(CalendarEventRepository eventRepo, ContextFeatureMonthlyRepository contextRepo,
+            ObjectMapper objectMapper) {
+        this.eventRepo = eventRepo;
+        this.contextRepo = contextRepo;
+        this.objectMapper = objectMapper;
+    }
 
     @Override
     @Transactional
@@ -50,7 +55,7 @@ public class ContextServiceImpl implements ContextService {
             CalendarEvent evt = CalendarEvent.builder()
                     .eventDate(e.getDate())
                     .eventCode(e.getCode())
-                    .intensity((short) e.getIntensity())
+                    .intensity(e.getIntensity())
                     .notes(e.getNotes())
                     .build();
             // TODO: Real implementation should check

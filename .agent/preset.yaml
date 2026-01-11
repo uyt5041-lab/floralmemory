@@ -1,0 +1,393 @@
+preset:
+  id: workflow-core-v0
+  name: "Dev 5-cycle + Integrate + Method Profiles"
+  version: 0.1.0
+  description: >
+    Domain-agnostic coding agent workflow preset.
+    Adds Integrate(Commit/Push) stage after Test, plus implementation methodologies (TDD + custom).
+  tags: [workflow, agent, five-cycle, integrate, git, methodology, tdd]
+
+# -------------------------
+# 1) Authority (우선순위)
+# -------------------------
+authority:
+  # README의 "Authority chain" 구조를 그대로 가져오되, 도메인 문서는 프로젝트 팩으로 분리하는 전제
+  documents:
+    - id: system_prompt
+      label: "SYSTEM_PROMPT"
+      priority: 100
+    - id: workflow
+      label: "workflow.md"
+      priority: 90
+    - id: methodology
+      label: "methodology.md"
+      priority: 80
+    - id: architecture
+      label: "architecture.md"
+      priority: 70
+    - id: coding_rules
+      label: "coding-rules.md"
+      priority: 60
+    - id: tests
+      label: "tests.md"
+      priority: 60
+    - id: worklog
+      label: "work/* (logs)"
+      priority: 50
+    - id: notes
+      label: "notes/*"
+      priority: 40
+
+  conflict_resolution:
+    mode: higher_priority_wins
+    on_tie: newest_wins
+    require_log: true
+
+# -------------------------
+# 2) Policies (가드레일/제약)
+# -------------------------
+policies:
+  filesystem:
+    # README의 "수정 금지/워크폴더 규칙"을 일반화
+    protected_paths:
+      - ".git/"
+      - "architecture/"
+      - "workflow/"
+    work_paths:
+      - "work/"
+    rules:
+      - id: do_not_edit_protected_without_plan
+        severity: error
+        when:
+          action: write
+          target_in: protected_paths
+        require:
+          - plan_reference_in_worklog: true
+      - id: require_worklog_for_material_change
+        severity: warning
+        when:
+          action: write
+          target_in: ["src/", "app/", "packages/"]
+        require:
+          - append_worklog_entry: true
+
+  quality_gates:
+    # Stage gate에서 참조하는 “필수 통과 항목”들
+    required_checks:
+      - id: format
+        label: "format/lint"
+      - id: unit_tests
+        label: "unit tests"
+      - id: integration_tests
+        label: "integration tests"
+      - id: git_clean
+        label: "git status clean"
+      - id: commit_message
+        label: "commit message convention"
+
+  git:
+    commit:
+      message_convention:
+        # 간단한 Conventional Commits 느낌(원하면 앱에서 룰셋 교체 가능)
+        pattern: "^(feat|fix|refactor|test|docs|chore)(\\([a-zA-Z0-9_-]+\\))?: .{10,}$"
+        examples:
+          - "feat(auth): add refresh token rotation"
+          - "fix(api): handle null payload in parser"
+    push:
+      default_remote: "origin"
+      default_branch: "main"
+      allow_force_push: false
+
+# -------------------------
+# 3) Cycle (5사이클 + Integrate)
+# -------------------------
+cycle:
+  stages:
+    - id: requirements
+      label: "Requirements"
+      order: 10
+    - id: design
+      label: "Design"
+      order: 20
+    - id: implementation
+      label: "Implementation"
+      order: 30
+    - id: test
+      label: "Test"
+      order: 40
+    - id: integrate
+      label: "Integrate (Commit/Push)"
+      order: 50
+    - id: maintenance
+      label: "Maintenance"
+      order: 60
+
+  stage_definitions:
+    requirements:
+      intent: "문제/범위/성공조건을 확정한다"
+      artifacts:
+        required:
+          - "workflow/requirements.md"
+      entry_checklist:
+        - "이슈/목표 한 줄 정의"
+      exit_checklist:
+        - "성공조건(DoD) 최소 1개 이상 명시"
+        - "리스크/가정 최소 1개 기록"
+      auto_actions: []
+
+    design:
+      intent: "구현 전에 구조/인터페이스를 설계한다"
+      artifacts:
+        required:
+          - "architecture/design.md"
+      entry_checklist:
+        - "요구사항 문서 링크 확인"
+      exit_checklist:
+        - "핵심 데이터/인터페이스/흐름 1페이지 요약"
+        - "테스트 전략(무엇을 어떻게 검증할지) 초안"
+      auto_actions: []
+
+    implementation:
+      intent: "방법론 프로파일에 따라 코드를 구현한다"
+      artifacts:
+        required:
+          - "work/implementation-log.md"
+      entry_checklist:
+        - "선택된 방법론 프로파일 확인"
+      exit_checklist:
+        - "변경 범위가 work log에 요약됨"
+        - "최소 단위 기능(슬라이스) 1개 완료"
+      auto_actions: []
+
+      methodology:
+        # 앱 UI에서 드롭다운으로 고를 수 있는 부분
+        selected_profile: "TDD"   # "TDD" | "CUSTOM_IMO" | "NONE"
+        profiles:
+          TDD:
+            label: "TDD (Red-Green-Refactor)"
+            cadence:
+              - "Red: 실패하는 테스트 먼저 작성"
+              - "Green: 최소 구현으로 통과"
+              - "Refactor: 중복 제거/가독성 개선"
+            rules:
+              - id: require_test_first_for_new_behavior
+                severity: warning
+                description: "새 행동 추가 시 테스트부터 시작"
+              - id: keep_cycles_small
+                severity: info
+                description: "작은 단위로 자주 통과"
+            artifacts:
+              required:
+                - "tests/**"
+            done_definition:
+              - "관련 테스트가 존재하고 의미있는 실패-성공 이력이 있음"
+              - "리팩토링 후 테스트 유지"
+
+          CUSTOM_IMO:
+            # IMO는 너의 내부 약어(커스텀 슬롯). 여기서 마음대로 정의 가능.
+            label: "CUSTOM_IMO"
+            cadence:
+              - "I: Intent 먼저(무엇을 왜) 3줄"
+              - "M: Minimal slice(최소 단위) 구현"
+              - "O: Observe(로그/메트릭/테스트)로 확인"
+            rules:
+              - id: require_intent_note
+                severity: warning
+                description: "구현 전 Intent 3줄 메모"
+              - id: observe_before_expand
+                severity: info
+                description: "관찰(테스트/로그) 확인 후 확장"
+            artifacts:
+              required:
+                - "work/imo-notes.md"
+                - "tests/**"
+            done_definition:
+              - "Intent/Minimal/Observe 로그가 남음"
+              - "관찰(테스트/로그)로 증거 확보"
+
+          NONE:
+            label: "No strict methodology"
+            cadence: []
+            rules: []
+            artifacts:
+              required: []
+            done_definition:
+              - "기능 동작 확인"
+              - "기본 테스트 최소 1개"
+
+    test:
+      intent: "자동화된 테스트로 기능을 검증한다"
+      artifacts:
+        required:
+          - "work/test-log.md"
+      entry_checklist:
+        - "변경된 기능 목록 확인"
+      exit_checklist:
+        - "unit tests 통과"
+        - "integration tests(해당 시) 통과"
+        - "리그레션 체크 항목 기록"
+      auto_actions:
+        # 앱에서 실제 명령 실행은 옵션. 우선은 템플릿만 둠.
+        - type: command_template
+          id: run_unit_tests
+          command: "npm test"
+        - type: command_template
+          id: run_integration_tests
+          command: "npm run test:integration"
+
+    integrate:
+      intent: "테스트 통과 산출물을 커밋/푸시로 고정한다"
+      artifacts:
+        required:
+          - "work/integrate-log.md"
+      entry_checklist:
+        - "Test 단계 exit 조건이 충족되었는가?"
+      exit_checklist:
+        - "format/lint 통과"
+        - "git status clean"
+        - "commit message 규칙 통과"
+        - "commit hash 기록"
+        - "push 완료"
+      auto_actions:
+        - type: command_template
+          id: format_check
+          command: "npm run format:check"
+        - type: command_template
+          id: lint
+          command: "npm run lint"
+        - type: command_template
+          id: git_status
+          command: "git status --porcelain"
+        - type: command_template
+          id: git_commit
+          command: "git commit -m \"feat(scope): message\""
+        - type: command_template
+          id: git_push
+          command: "git push origin main"
+
+    maintenance:
+      intent: "유지보수/리팩토링/요구사항 환류를 수행한다"
+      artifacts:
+        required:
+          - "work/maintenance-log.md"
+      entry_checklist:
+        - "Integrate 로그에 커밋/푸시가 기록됐는가?"
+      exit_checklist:
+        - "기술부채/리팩토링 후보 최소 1개 기록"
+        - "요구사항 변경점이 있으면 requirements로 환류"
+      auto_actions: []
+
+# -------------------------
+# 4) Stage Gates (단계 잠금 규칙)
+# -------------------------
+gates:
+  # “테스트 통과 전 Integrate 금지”
+  - id: block_integrate_until_tests_pass
+    type: stage_dependency
+    from_stage: integrate
+    depends_on:
+      stage: test
+      require_exit_checklist: true
+    severity: error
+    message: "Test exit 조건(테스트 통과/기록) 없이는 Integrate로 이동 불가"
+
+  # “Integrate 전에는 push 금지” 같은 정책성 액션 가드
+  - id: block_push_outside_integrate
+    type: action_guard
+    action: git.push
+    allowed_stages: [integrate]
+    severity: error
+    message: "git push는 Integrate 단계에서만 허용"
+
+# -------------------------
+# 5) Governance (기록/투두/루프)
+# -------------------------
+governance:
+  logging:
+    # README의 “work 폴더에 기록, 확정/기록/투두/루프” 감각을 일반화
+    rules:
+      - id: always_append_worklog
+        target: "work/worklog.md"
+        when:
+          on_stage_exit: true
+        template: |
+          - [{{date}}] Stage={{stage_id}}
+            - Summary: {{summary}}
+            - Decisions: {{decisions}}
+            - TODO: {{todos}}
+            - Evidence: {{evidence_links}}
+
+      - id: record_commit_hash
+        target: "work/integrate-log.md"
+        when:
+          stage_id: integrate
+          on_stage_exit: true
+        template: |
+          - [{{date}}] Integrate
+            - Commit: {{git.commit_hash}}
+            - Branch: {{git.branch}}
+            - Remote: {{git.remote}}
+            - Pushed: {{git.pushed}}
+
+  todo_extraction:
+    # 로그에서 TODO를 자동 수집하는 규칙(앱에서 파서로 구현)
+    patterns:
+      - "- TODO:"
+      - "- [ ]"
+    output:
+      file: "work/todo.md"
+      mode: append
+
+# -------------------------
+# 6) Scoring (선택)
+# -------------------------
+scoring:
+  enabled: true
+  goal: "maximize_score_minimize_attempts"
+  file: "work/scoring.md"
+  rules:
+    - id: +10_test_first
+      when:
+        methodology_profile: "TDD"
+        evidence_contains: ["tests/"]
+      score: 10
+    - id: +15_all_gates_pass
+      when:
+        stage_id: integrate
+        require_exit_checklist: true
+      score: 15
+    - id: -20_push_without_integrate
+      when:
+        action: git.push
+        stage_id_not: integrate
+      score: -20
+
+# -------------------------
+# 7) Export (컴파일러 출력 템플릿)
+# -------------------------
+export:
+  targets:
+    - id: system_prompt_snippet
+      type: markdown
+      output: "workflow/export/system-prompt-snippet.md"
+      template: |
+        # Workflow Rules (Preset: {{preset.name}})
+        - Authority: higher priority wins; log conflicts.
+        - Cycle: Requirements → Design → Implementation → Test → Integrate(Commit/Push) → Maintenance
+        - Gates:
+          - No Integrate unless Test exit checklist is satisfied.
+          - No git push outside Integrate.
+        - Implementation Method: {{cycle.stage_definitions.implementation.methodology.selected_profile}}
+        - Always log stage exits into work/worklog.md
+
+    - id: folder_scaffold
+      type: scaffold
+      output_root: "."
+      create:
+        - "workflow/requirements.md"
+        - "architecture/design.md"
+        - "work/worklog.md"
+        - "work/test-log.md"
+        - "work/integrate-log.md"
+        - "work/maintenance-log.md"
+

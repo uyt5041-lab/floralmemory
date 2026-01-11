@@ -11,10 +11,13 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/context")
-@RequiredArgsConstructor
 public class ContextController {
 
     private final ContextService contextService;
+
+    public ContextController(ContextService contextService) {
+        this.contextService = contextService;
+    }
 
     @PostMapping("/events")
     public ApiResponse<Map<String, Integer>> upsertEvents(@RequestBody UpsertEventsRequest req) {

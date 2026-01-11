@@ -7,7 +7,7 @@ import com.bit.floralmemory.service.ForecastService;
 import com.bit.floralmemory.util.MonthUtils;
 import com.bit.floralmemory.util.StatsUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,10 +21,11 @@ import java.util.*;
  * - Generates forecasts with simple deterministic baselines (short/mid/long)
  * - Persists model_run, forecast_result, forecast_ensemble
  *
- * Later you can swap the three baseline models with calls to an external model-service (FastAPI).
+ * Later you can swap the three baseline models with calls to an external
+ * model-service (FastAPI).
  */
 @Service
-@RequiredArgsConstructor
+
 public class ForecastServiceImpl implements ForecastService {
 
     private final ImportTradeMonthlyFactRepository importFactRepo;
@@ -32,6 +33,16 @@ public class ForecastServiceImpl implements ForecastService {
     private final ForecastResultRepository forecastResultRepo;
     private final ForecastEnsembleRepository forecastEnsembleRepo;
     private final ObjectMapper objectMapper;
+
+    public ForecastServiceImpl(ImportTradeMonthlyFactRepository importFactRepo, ModelRunRepository modelRunRepo,
+            ForecastResultRepository forecastResultRepo, ForecastEnsembleRepository forecastEnsembleRepo,
+            ObjectMapper objectMapper) {
+        this.importFactRepo = importFactRepo;
+        this.modelRunRepo = modelRunRepo;
+        this.forecastResultRepo = forecastResultRepo;
+        this.forecastEnsembleRepo = forecastEnsembleRepo;
+        this.objectMapper = objectMapper;
+    }
 
     @Override
     @Transactional
@@ -49,8 +60,7 @@ public class ForecastServiceImpl implements ForecastService {
                 trainStart, trainEnd,
                 req.getScope().getImporter(),
                 req.getScope().getExporter(),
-                req.getScope().getProductSlug()
-        );
+                req.getScope().getProductSlug());
         if (facts.isEmpty()) {
             throw new IllegalStateException("No training data found in import_trade_monthly_fact for the given scope.");
         }
@@ -88,8 +98,10 @@ public class ForecastServiceImpl implements ForecastService {
         // 5) Run baseline models
         Map<String, Map<LocalDate, Pred>> modelPreds = new LinkedHashMap<>();
         // Always run at least one per family (spec default)
-        String shortModel = pickFirst(req.getModels() == null ? null : req.getModels().getShortModels(), "ShortHoltWinters");
-        String midModel = pickFirst(req.getModels() == null ? null : req.getModels().getMidModels(), "MidProphetEvents");
+        String shortModel = pickFirst(req.getModels() == null ? null : req.getModels().getShortModels(),
+                "ShortHoltWinters");
+        String midModel = pickFirst(req.getModels() == null ? null : req.getModels().getMidModels(),
+                "MidProphetEvents");
         String longModel = pickFirst(req.getModels() == null ? null : req.getModels().getLongModels(), "LongSARIMA");
 
         modelPreds.put(shortModel, shortBaseline(y, futureMonths));
@@ -147,11 +159,16 @@ public class ForecastServiceImpl implements ForecastService {
     }
 
     private void validate(ForecastRunRequest req) {
-        if (req == null || req.getScope() == null) throw new IllegalArgumentException("scope is required");
-        if (req.getTrainStart() == null || req.getTrainEnd() == null) throw new IllegalArgumentException("trainStart/trainEnd required");
-        if (req.getForecastStart() == null || req.getForecastEnd() == null) throw new IllegalArgumentException("forecastStart/forecastEnd required");
-        if (req.getScope().getImporter() == null || req.getScope().getExporter() == null) throw new IllegalArgumentException("importer/exporter required");
-        if (req.getScope().getProductSlug() == null) throw new IllegalArgumentException("productSlug required");
+        if (req == null || req.getScope() == null)
+            throw new IllegalArgumentException("scope is required");
+        if (req.getTrainStart() == null || req.getTrainEnd() == null)
+            throw new IllegalArgumentException("trainStart/trainEnd required");
+        if (req.getForecastStart() == null || req.getForecastEnd() == null)
+            throw new IllegalArgumentException("forecastStart/forecastEnd required");
+        if (req.getScope().getImporter() == null || req.getScope().getExporter() == null)
+            throw new IllegalArgumentException("importer/exporter required");
+        if (req.getScope().getProductSlug() == null)
+            throw new IllegalArgumentException("productSlug required");
     }
 
     private List<LocalDate> enumerateMonths(LocalDate fromMonth, LocalDate toMonth) {
@@ -165,7 +182,8 @@ public class ForecastServiceImpl implements ForecastService {
     }
 
     private String pickFirst(List<String> list, String fallback) {
-        if (list == null || list.isEmpty() || list.get(0) == null || list.get(0).isBlank()) return fallback;
+        if (list == null || list.isEmpty() || list.get(0) == null || list.get(0).isBlank())
+            return fallback;
         return list.get(0);
     }
 
@@ -190,13 +208,15 @@ public class ForecastServiceImpl implements ForecastService {
         int n = items.size();
         int window = Math.min(3, n);
         List<Double> last = new ArrayList<>();
-        for (int i = n - window; i < n; i++) last.add(items.get(i).getValue());
+        for (int i = n - window; i < n; i++)
+            last.add(items.get(i).getValue());
         double mu = StatsUtils.mean(last);
 
         // sigma from last 12 months variability (fallback: 0.1*mu)
         int sigmaWindow = Math.min(12, n);
         List<Double> sigmaXs = new ArrayList<>();
-        for (int i = n - sigmaWindow; i < n; i++) sigmaXs.add(items.get(i).getValue());
+        for (int i = n - sigmaWindow; i < n; i++)
+            sigmaXs.add(items.get(i).getValue());
         double sigma = Math.max(StatsUtils.stddev(sigmaXs), Math.abs(mu) * 0.10);
 
         Map<LocalDate, Pred> out = new LinkedHashMap<>();
@@ -207,7 +227,8 @@ public class ForecastServiceImpl implements ForecastService {
     }
 
     /** MID: month-of-year average (seasonal average) */
-    private Map<LocalDate, Pred> midBaselineSeasonalAvg(LinkedHashMap<LocalDate, Double> y, List<LocalDate> futureMonths) {
+    private Map<LocalDate, Pred> midBaselineSeasonalAvg(LinkedHashMap<LocalDate, Double> y,
+            List<LocalDate> futureMonths) {
         Map<Integer, List<Double>> byMonth = new HashMap<>();
         for (Map.Entry<LocalDate, Double> e : y.entrySet()) {
             int mo = e.getKey().getMonthValue();
@@ -225,7 +246,8 @@ public class ForecastServiceImpl implements ForecastService {
     }
 
     /** LONG: linear trend + additive seasonal factors */
-    private Map<LocalDate, Pred> longBaselineTrendPlusSeason(LinkedHashMap<LocalDate, Double> y, List<LocalDate> futureMonths) {
+    private Map<LocalDate, Pred> longBaselineTrendPlusSeason(LinkedHashMap<LocalDate, Double> y,
+            List<LocalDate> futureMonths) {
         List<Map.Entry<LocalDate, Double>> items = new ArrayList<>(y.entrySet());
         int n = items.size();
         // simple OLS on index t=0..n-1
@@ -255,7 +277,8 @@ public class ForecastServiceImpl implements ForecastService {
         for (Map.Entry<Integer, List<Double>> e : residByMonth.entrySet()) {
             season.put(e.getKey(), StatsUtils.mean(e.getValue()));
         }
-        double sigma = Math.max(StatsUtils.stddev(residuals), Math.abs(StatsUtils.mean(new ArrayList<>(y.values()))) * 0.15);
+        double sigma = Math.max(StatsUtils.stddev(residuals),
+                Math.abs(StatsUtils.mean(new ArrayList<>(y.values()))) * 0.15);
 
         // forecast
         LocalDate lastTrainMonth = items.get(n - 1).getKey();
@@ -276,11 +299,16 @@ public class ForecastServiceImpl implements ForecastService {
 
     private FamilyWeights weightsByHorizon(long horizonMonths) {
         // Spec default (monthly horizon buckets)
-        if (horizonMonths <= 3) return new FamilyWeights(0.4, 0.4, 0.2);
-        if (horizonMonths <= 6) return new FamilyWeights(0.2, 0.4, 0.4);
+        if (horizonMonths <= 3)
+            return new FamilyWeights(0.4, 0.4, 0.2);
+        if (horizonMonths <= 6)
+            return new FamilyWeights(0.2, 0.4, 0.4);
         return new FamilyWeights(0.1, 0.3, 0.6);
     }
 
-    private record Pred(double yhat, double sigma) {}
-    private record FamilyWeights(double shortW, double midW, double longW) {}
+    private record Pred(double yhat, double sigma) {
+    }
+
+    private record FamilyWeights(double shortW, double midW, double longW) {
+    }
 }
