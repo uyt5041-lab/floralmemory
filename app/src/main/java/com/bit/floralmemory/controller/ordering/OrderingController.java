@@ -2,17 +2,19 @@ package com.bit.floralmemory.controller.ordering;
 
 import com.bit.floralmemory.dto.common.ApiResponse;
 import com.bit.floralmemory.dto.ordering.*;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/ordering")
-@RequiredArgsConstructor
 public class OrderingController {
 
     private final com.bit.floralmemory.service.OrderingService orderingService;
 
-    @PostMapping("/run")
+    public OrderingController(com.bit.floralmemory.service.OrderingService orderingService) {
+        this.orderingService = orderingService;
+    }
+
     @PostMapping("/run")
     public ApiResponse<OrderingRunResponse> run(@RequestBody OrderingRunRequest req) {
         Long id = orderingService.runOrdering(req);
